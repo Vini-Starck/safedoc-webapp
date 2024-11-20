@@ -1,0 +1,7 @@
+Flask==2.2.3
+pyodbc==4.0.32
+paramiko==2.10.4
+werkzeug==2.2.3
+azure-cognitiveservices-vision-face==1.0.1
+msrest==0.7.1
+Pillow==9.4.0

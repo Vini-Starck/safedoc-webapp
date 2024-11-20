@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrar Usuário</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>Registrar Usuário</h1>
+
+    <!-- Exibir mensagens flash aqui -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul>
+                {% for category, message in messages %}
+                    <li class="flash {{ category }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST" enctype="multipart/form-data">
+        <label for="name">Nome:</label>
+        <input type="text" id="name" name="name" required><br>
+
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required><br>
+
+        <label for="photo">Foto:</label>
+        <input type="file" id="photo" name="photo" required><br>
+
+        <label for="document">Documento:</label>
+        <input type="file" id="document" name="document" required><br>
+
+        <button type="submit">Registrar</button>
+    </form>
+
+    <a href="{{ url_for('index') }}">Voltar</a>
+</body>
+</html>
