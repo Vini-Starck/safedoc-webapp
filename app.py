@@ -8,22 +8,11 @@ from azure.cognitiveservices.vision.face import FaceClient
 from msrest.authentication import CognitiveServicesCredentials
 import json
 import requests
+import base64
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 
 app = Flask(__name__)
 app.secret_key = 'ff91935200508524ead9d3e6220966a3'
-
-image_url = 'https://st4.depositphotos.com/6903990/27898/i/450/depositphotos_278981062-stock-photo-beautiful-young-woman-clean-fresh.jpg'
-
-# Configurações do Azure
-FACE_API_KEY = '1ZCQRsPeCOYdgsIGqFSP4DY9ATze48rWxLXu847Ec0fvWbeGCcNHJQQJ99AKACZoyfiXJ3w3AAAKACOGhRlw'
-FACE_API_ENDPOINT = 'https://safedoc-servicecog.cognitiveservices.azure.com/'
-
-# Configuração do banco de dados
-SERVER = 'sqlserver-safedoc.database.windows.net'
-DATABASE = 'SafeDocDb'
-USERNAME = 'azureuser'
-PASSWORD = 'Admsenac123!'
-DRIVER = '{ODBC Driver 18 for SQL Server}'
 
 # Configuração do diretório de uploads
 UPLOAD_FOLDER = 'uploads/'
@@ -46,7 +35,7 @@ def allowed_document_file(filename):
 
 # Função para conectar ao banco de dados
 def get_db_connection():
-    conn = pyodbc.connect(f'DRIVER={DRIVER};SERVER={SERVER};PORT=1433;DATABASE={DATABASE};UID={USERNAME};PWD={PASSWORD}')
+    conn = pyodbc.connect(f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER=sqlserver-safedoc.database.windows.net;PORT=1433;DATABASE=SafeDocDb;UID=azureuser;PWD=Admsenac123!')
     
     # Criação da tabela Users, caso não exista
     cursor = conn.cursor()
@@ -65,24 +54,31 @@ def get_db_connection():
     
     return conn
 
-# Função para enviar arquivos para a VM via SFTP (usando paramiko)
-def send_file_to_vm(vm_ip, vm_user, vm_password, file_path, remote_path):
-    try:
-        transport = paramiko.Transport((vm_ip, 22))
-        transport.connect(username=vm_user, password=vm_password)
-        sftp = paramiko.SFTPClient.from_transport(transport)
-        sftp.put(file_path, remote_path)
-        sftp.close()
-        transport.close()
-        logging.debug(f"Arquivo {file_path} enviado com sucesso para {vm_ip}:{remote_path}")
-    except Exception as e:
-        logging.error(f"Erro ao enviar arquivo para {vm_ip}: {e}")
-        raise  # Levanta a exceção para ser capturada no fluxo principal
+# Função para hospedar a imagem no Azure Blob Storage
+def upload_to_blob(image_path, filename):
+    # Credenciais do Azure Blob Storage
+    account_name = "blobstoragesafedoc"
+    account_key = "xQVjsEgKRYDvP9ZepBg182E8F9NKMvAKuYhn75XHhuMYBnA7Z3EuBcND2P8GyPAF07+J7Z1BA4Xt+AStEE9QOA=="
+    container_name = "fotos"
+
+    # Conectar ao Blob Service Client
+    blob_service_client = BlobServiceClient(account_url=f"https://{account_name}.blob.core.windows.net", credential=account_key)
+    container_client = blob_service_client.get_container_client(container_name)
+
+    # Definir o nome do arquivo no Blob Storage
+    blob_client = container_client.get_blob_client(filename)
+
+    # Enviar o arquivo para o Blob Storage
+    with open(image_path, "rb") as data:
+        blob_client.upload_blob(data, overwrite=True)
+
+    # URL pública do arquivo no Blob Storage
+    return f"https://{account_name}.blob.core.windows.net/{container_name}/{filename}"
 
 # Função para detectar rostos na imagem usando a URL
 def detect_faces(image_url):
-    endpoint = FACE_API_ENDPOINT + 'face/v1.0/detect'
-    subscription_key = FACE_API_KEY
+    endpoint = 'https://safedoc-servicecog.cognitiveservices.azure.com/face/v1.0/detect'
+    subscription_key = '1ZCQRsPeCOYdgsIGqFSP4DY9ATze48rWxLXu847Ec0fvWbeGCcNHJQQJ99AKACZoyfiXJ3w3AAAKACOGhRlw'
 
     # Parâmetros de requisição
     params = {
@@ -108,6 +104,32 @@ def detect_faces(image_url):
 
     return response.json()
 
+# Função para enviar arquivos para a VM Windows
+def send_file_to_windows_vm(file_path, destination_path):
+    # Conectar à VM Windows usando SSH (paramiko)
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.connect('windows_vm_ip', username='windows_user', password='windows_password')
+
+    # Enviar o arquivo
+    sftp = ssh.open_sftp()
+    sftp.put(file_path, destination_path)
+    sftp.close()
+    ssh.close()
+
+# Função para enviar documentos para a VM Linux
+def send_file_to_linux_vm(file_path, destination_path):
+    # Conectar à VM Linux usando SSH (paramiko)
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.connect('linux_vm_ip', username='linux_user', password='linux_password')
+
+    # Enviar o arquivo
+    sftp = ssh.open_sftp()
+    sftp.put(file_path, destination_path)
+    sftp.close()
+    ssh.close()
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -132,16 +154,16 @@ def register():
                 photo.save(photo_path)
                 logging.debug(f"{photo_path} salva com sucesso")
 
-                # Verificar se a imagem foi salva corretamente
-                if not os.path.exists(photo_path):
-                    flash('Erro ao salvar a imagem.', 'error')
-                    logging.debug(f"Erro ao salvar imagem")
-                    return redirect(url_for('register'))
-                    
-                # Verificar o tamanho do arquivo (máximo 4MB)
-                if photo.content_length > 4 * 1024 * 1024:
-                    flash('A imagem é muito grande. O tamanho máximo permitido é 4 MB.', 'error')
-                    logging.debug(f"Imagem muito grande")
+                # Hospedar a foto no Azure Blob Storage e obter a URL
+                image_url = upload_to_blob(photo_path, filename)
+                logging.debug(f"Hospedando foto no Blob e obtendo URL")
+
+                # Verificar se a foto contém rosto usando o serviço de IA da Azure
+                faces = detect_faces(image_url)
+                logging.debug(f"Validando rostos")
+
+                if not faces:
+                    flash('A foto não contém um rosto. Por favor, envie uma foto válida com rosto.', 'error')
                     return redirect(url_for('register'))
 
                 # Verificar se o documento foi enviado e se é válido
@@ -154,48 +176,18 @@ def register():
                     document.save(document_path)
                     logging.debug(f"{document_path} salvo com sucesso")
 
-                    # Verificar o tamanho do arquivo (máximo 10MB)
-                    if document.content_length > 10 * 1024 * 1024:
-                        flash('O documento é muito grande. O tamanho máximo permitido é 10 MB.', 'error')
-                        logging.debug(f"Documento muito grande")
-                        return redirect(url_for('register'))
-
-                    logging.debug(f"Tipo de conteúdo do arquivo: {document.content_type}")
-                    logging.debug(f"Tamanho do arquivo: {os.path.getsize(document_path)} bytes")
-
-                    # Agora, enviar a URL da imagem para a API de detecção de rostos
-                    detected_faces = detect_faces(image_url)
-
-                    if not detected_faces:
-                        flash('Nenhum rosto detectado na foto.', 'error')
-                        return redirect(url_for('register'))
-
-                    logging.debug("Rosto detectado com sucesso!")
-
                     # Inserir no banco de dados
                     conn = get_db_connection()
                     cursor = conn.cursor()
                     cursor.execute("INSERT INTO Users (Name, Email, PhotoPath, DocumentPath) VALUES (?, ?, ?, ?)",
-                                   (name, email, photo_path, document_path))
+                                   (name, email, image_url, document_path))  # Salva a URL da foto
                     conn.commit()
                     cursor.close()
                     logging.debug("Usuário inserido no banco de dados com sucesso!")
 
-                    # Enviar os arquivos para as VMs
-                    vm_windows_ip = '4.228.63.80'
-                    vm_linux_ip = '4.228.63.146'
-                    vm_user = 'azureuser'
-                    vm_password = 'Admsenac123!'
-
-                    # Caminho remoto para a foto na VM Windows (diretório C:\Users\azureuser\Pictures)
-                    remote_photo_path_windows = f'C:/Users/azureuser/Pictures/{filename}'
-                    remote_document_path_linux = f'/home/azureuser/documentos/{document_filename}'
-
-                    # Enviar a foto para a VM Windows
-                    send_file_to_vm(vm_windows_ip, vm_user, vm_password, photo_path, remote_photo_path_windows)
-
-                    # Enviar o documento para a VM Linux
-                    send_file_to_vm(vm_linux_ip, vm_user, vm_password, document_path, remote_document_path_linux)
+                    # Enviar a imagem para a VM Windows e o documento para a VM Linux
+                    send_file_to_windows_vm(photo_path, r'caminho\\na\\pasta\\windows')
+                    send_file_to_linux_vm(document_path, '/caminho/na/pasta/linux')
 
                     flash('Usuário registrado com sucesso e arquivos enviados!', 'success')
                     logging.debug("Processo concluído com sucesso!")
@@ -226,8 +218,7 @@ def index():
 def query():
     if request.method == 'POST':
         logging.debug("Realizando consulta...")
-        # Aqui você pode implementar o código para consulta de dados.
-        pass
+
     return render_template('query.html')
 
 if __name__ == '__main__':
