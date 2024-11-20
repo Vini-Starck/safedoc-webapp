@@ -12,8 +12,8 @@ app = Flask(__name__)
 app.secret_key = 'ff91935200508524ead9d3e6220966a3'
 
 # Configurações do Azure
-FACE_API_KEY = ''
-FACE_API_ENDPOINT = ''
+FACE_API_KEY = '1ZCQRsPeCOYdgsIGqFSP4DY9ATze48rWxLXu847Ec0fvWbeGCcNHJQQJ99AKACZoyfiXJ3w3AAAKACOGhRlw'
+FACE_API_ENDPOINT = 'https://safedoc-servicecog.cognitiveservices.azure.com/'
 FACE_CLIENT = FaceClient(FACE_API_ENDPOINT, CognitiveServicesCredentials(FACE_API_KEY))
 
 # Configuração do banco de dados
@@ -164,8 +164,8 @@ def register():
                 logging.debug("Usuário inserido no banco de dados com sucesso!")
 
                 # Enviar os arquivos para as VMs
-                vm_windows_ip = '4.228.62.9'
-                vm_linux_ip = '4.228.62.17'
+                vm_windows_ip = '4.228.63.80'
+                vm_linux_ip = '4.228.63.146'
                 vm_user = 'azureuser'
                 vm_password = 'Admsenac123!'
 
