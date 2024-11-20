@@ -109,7 +109,7 @@ def send_file_to_windows_vm(file_path, destination_path):
     # Conectar à VM Windows usando SSH (paramiko)
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect('windows_vm_ip', username='windows_user', password='windows_password')
+    ssh.connect('4.228.63.80', username='azureuser', password='Admsenac123!')
 
     # Enviar o arquivo
     sftp = ssh.open_sftp()
@@ -122,13 +122,28 @@ def send_file_to_linux_vm(file_path, destination_path):
     # Conectar à VM Linux usando SSH (paramiko)
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect('linux_vm_ip', username='linux_user', password='linux_password')
+    ssh.connect('4.228.63.146', username='azureuser', password='Admsenac123!')
 
     # Enviar o arquivo
     sftp = ssh.open_sftp()
     sftp.put(file_path, destination_path)
     sftp.close()
     ssh.close()
+
+
+# Função para enviar arquivos para a VM via SFTP (usando paramiko)
+def send_file_to_vm(vm_ip, vm_user, vm_password, file_path, remote_path):
+    try:
+        transport = paramiko.Transport((vm_ip, 22))
+        transport.connect(username=vm_user, password=vm_password)
+        sftp = paramiko.SFTPClient.from_transport(transport)
+        sftp.put(file_path, remote_path)
+        sftp.close()
+        transport.close()
+        logging.debug(f"Arquivo {file_path} enviado com sucesso para {vm_ip}:{remote_path}")
+    except Exception as e:
+        logging.error(f"Erro ao enviar arquivo para {vm_ip}: {e}")
+        raise  # Levanta a exceção para ser capturada no fluxo principal
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -185,9 +200,22 @@ def register():
                     cursor.close()
                     logging.debug("Usuário inserido no banco de dados com sucesso!")
 
-                    # Enviar a imagem para a VM Windows e o documento para a VM Linux
-                    send_file_to_windows_vm(photo_path, r'caminho\\na\\pasta\\windows')
-                    send_file_to_linux_vm(document_path, '/caminho/na/pasta/linux')
+                    # Enviar os arquivos para as VMs
+                    vm_windows_ip = '4.228.62.9'
+                    vm_linux_ip = '4.228.62.17'
+                    vm_user = 'azureuser'
+                    vm_password = 'Admsenac123!'
+
+
+                    remote_photo_path_windows = f'C:/Users/azureuser/Pictures/{filename}'
+                    remote_document_path_linux = f'/home/azureuser/documentos/{secure_filename(document.filename)}'
+
+                    # Enviar a foto para a VM Windows
+                    send_file_to_vm(vm_windows_ip, vm_user, vm_password, photo_path, remote_photo_path_windows)
+
+                    # Enviar o documento para a VM Linux
+                    send_file_to_vm(vm_linux_ip, vm_user, vm_password, document_path, remote_document_path_linux)
+
 
                     flash('Usuário registrado com sucesso e arquivos enviados!', 'success')
                     logging.debug("Processo concluído com sucesso!")
