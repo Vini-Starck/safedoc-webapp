@@ -4,9 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Consulta de Usuários</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        img {
+            max-width: 100px;
+            max-height: 100px;
+        }
+    </style>
 </head>
 <body>
     <h1>Consulta de Usuários</h1>
+
     <form method="POST">
         <label for="name">Digite o nome:</label>
         <input type="text" id="name" name="name" required>
@@ -15,11 +36,40 @@
 
     {% if users %}
         <h2>Usuários encontrados:</h2>
-        <ul>
-        {% for user in users %}
-            <li>{{ user[1] }} - {{ user[2] }}</li>
-        {% endfor %}
-        </ul>
+        <table>
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Email</th>
+                    <th>Foto</th>
+                    <th>Documento</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                    <tr>
+                        <td>{{ user[1] }}</td>  <!-- Nome -->
+                        <td>{{ user[2] }}</td>  <!-- Email -->
+                        <td>
+                            {% if user[3] %}
+                                <img src="{{ user[3] }}" alt="Foto do Usuário">
+                            {% else %}
+                                <p>Sem foto</p>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user[4] %}
+                                <a href="{{ user[4] }}" target="_blank">Ver Documento</a>
+                            {% else %}
+                                <p>Sem documento</p>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Nenhum usuário encontrado.</p>
     {% endif %}
 
     <a href="{{ url_for('index') }}">Voltar</a>

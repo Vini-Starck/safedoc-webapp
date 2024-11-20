@@ -213,13 +213,16 @@ def register():
 def index():
     return render_template('index.html')
 
-# Página de consulta
-@app.route('/query', methods=['GET', 'POST'])
+@app.route('/query', methods=['GET'])
 def query():
-    if request.method == 'POST':
-        logging.debug("Realizando consulta...")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM Users")
+    users = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('query.html', users=users)
 
-    return render_template('query.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
