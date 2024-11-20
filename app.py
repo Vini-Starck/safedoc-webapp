@@ -241,6 +241,7 @@ def register():
 def index():
     return render_template('index.html')
 
+# Página de consulta
 @app.route('/query', methods=['GET'])
 def query():
     conn = get_db_connection()

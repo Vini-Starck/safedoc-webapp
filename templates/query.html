@@ -26,16 +26,9 @@
     </style>
 </head>
 <body>
-    <h1>Consulta de Usuários</h1>
-
-    <form method="POST">
-        <label for="name">Digite o nome:</label>
-        <input type="text" id="name" name="name" required>
-        <button type="submit">Consultar</button>
-    </form>
-
+    
     {% if users %}
-        <h2>Usuários encontrados:</h2>
+        <h1>Lista de usuários:</h1>
         <table>
             <thead>
                 <tr>
