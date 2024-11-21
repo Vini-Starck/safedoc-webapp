@@ -54,12 +54,11 @@ def get_db_connection():
     
     return conn
 
-# Função para hospedar a imagem no Azure Blob Storage
-def upload_to_blob(image_path, filename):
+# Função para hospedar arquivos no Azure Blob Storage (geral, tanto para fotos quanto documentos)
+def upload_to_blob(file_path, filename, container_name):
     # Credenciais do Azure Blob Storage
     account_name = "blobstoragesafedoc"
     account_key = "xQVjsEgKRYDvP9ZepBg182E8F9NKMvAKuYhn75XHhuMYBnA7Z3EuBcND2P8GyPAF07+J7Z1BA4Xt+AStEE9QOA=="
-    container_name = "fotos"
 
     # Conectar ao Blob Service Client
     blob_service_client = BlobServiceClient(account_url=f"https://{account_name}.blob.core.windows.net", credential=account_key)
@@ -69,7 +68,7 @@ def upload_to_blob(image_path, filename):
     blob_client = container_client.get_blob_client(filename)
 
     # Enviar o arquivo para o Blob Storage
-    with open(image_path, "rb") as data:
+    with open(file_path, "rb") as data:
         blob_client.upload_blob(data, overwrite=True)
 
     # URL pública do arquivo no Blob Storage
@@ -145,6 +144,8 @@ def send_file_to_vm(vm_ip, vm_user, vm_password, file_path, remote_path):
         logging.error(f"Erro ao enviar arquivo para {vm_ip}: {e}")
         raise  # Levanta a exceção para ser capturada no fluxo principal
 
+
+    
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -170,7 +171,7 @@ def register():
                 logging.debug(f"{photo_path} salva com sucesso")
 
                 # Hospedar a foto no Azure Blob Storage e obter a URL
-                image_url = upload_to_blob(photo_path, filename)
+                image_url = upload_to_blob(photo_path, filename, "fotos")
                 logging.debug(f"Hospedando foto no Blob e obtendo URL")
 
                 # Verificar se a foto contém rosto usando o serviço de IA da Azure
@@ -191,11 +192,15 @@ def register():
                     document.save(document_path)
                     logging.debug(f"{document_path} salvo com sucesso")
 
+                    # Hospedar o documento no Azure Blob Storage e obter a URL
+                    document_url = upload_to_blob(document_path, document_filename, "documentos")
+                    logging.debug(f"Hospedando documento no Blob e obtendo URL")
+
                     # Inserir no banco de dados
                     conn = get_db_connection()
                     cursor = conn.cursor()
                     cursor.execute("INSERT INTO Users (Name, Email, PhotoPath, DocumentPath) VALUES (?, ?, ?, ?)",
-                                   (name, email, image_url, document_path))  # Salva a URL da foto
+                                   (name, email, image_url, document_url))  # Salva a URL da foto e do documento
                     conn.commit()
                     cursor.close()
                     logging.debug("Usuário inserido no banco de dados com sucesso!")
@@ -206,16 +211,14 @@ def register():
                     vm_user = 'azureuser'
                     vm_password = 'Admsenac123!'
 
-
                     remote_photo_path_windows = f'C:/Users/azureuser/Pictures/{filename}'
-                    remote_document_path_linux = f'/home/azureuser/documentos/{secure_filename(document.filename)}'
+                    remote_document_path_linux = f'/home/azureuser/documentos/{document_filename}'
 
                     # Enviar a foto para a VM Windows
                     send_file_to_vm(vm_windows_ip, vm_user, vm_password, photo_path, remote_photo_path_windows)
 
                     # Enviar o documento para a VM Linux
                     send_file_to_vm(vm_linux_ip, vm_user, vm_password, document_path, remote_document_path_linux)
-
 
                     flash('Usuário registrado com sucesso e arquivos enviados!', 'success')
                     logging.debug("Processo concluído com sucesso!")
@@ -251,7 +254,6 @@ def query():
     cursor.close()
     conn.close()
     return render_template('query.html', users=users)
-
 
 if __name__ == '__main__':
     app.run(debug=True)
